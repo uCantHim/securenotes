@@ -1,12 +1,16 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
-import 'util.dart';
+import 'crypto_util.dart';
 
-class NoteData
+class Note extends ChangeNotifier
 {
-  NoteData(this.title, this.content);
+  String title;
+  String content;
 
-  NoteData.fromJson(Map obj)
+  Note(this.title, this.content);
+
+  Note.fromJson(Map obj)
       : title = obj['title'] ?? '<failed to parse title>'
       , content = obj['content'] ?? '<failed to parse content>';
 
@@ -17,53 +21,41 @@ class NoteData
     };
   }
 
-  String title;
-  String content;
+  void updateInStorage() {
+    notifyListeners();
+  }
 }
 
+typedef NoteList = List<Note>;
+
+/// The 'model' component in the MVVM-approach to the note screen.
+///
+/// Manages access to the file system and encryption.
 class NoteStorage
 {
-  NoteStorage(this._filePath, this._password, {this.notes=const []});
+  NoteStorage(this._filePath, this._password);
 
   final String _filePath;
   final String _password;
 
-  List<NoteData> notes;
+  Future<NoteList> loadNotes() async {
+    final notes = File(_filePath)
+        .create(exclusive: false)
+        .then((file) => file.readAsBytes())
+        .then((data) => decryptJson(data, _password))
+        .then((json) {
+          assert(json is List);
+          return [for (final note in json) Note.fromJson(note)];
+        });
 
-  static final Map<String, NoteStorage> _cache = {};
-
-  factory NoteStorage.load(String filePath, String password) {
-    password = password.padRight(32);
-    if (!_cache.containsKey(filePath))
-    {
-      final file = File(filePath);
-      if (!file.existsSync()) {
-        file.create();
-      }
-
-      var data = file.readAsBytesSync();
-      data = encryptJson([{'foo': 'bar', 'title': 'My note', 'content': 'Hello, note!'}], password);
-      final obj = decryptJson(data, password);
-      assert(obj is List);
-
-      final notes = [for (final note in obj) NoteData.fromJson(note)];
-      _cache[filePath] = NoteStorage(filePath, password, notes: notes);
-    }
-
-    assert(_cache.containsKey(filePath));
-    return _cache[filePath]!;
+    return notes;
   }
 
-  /// Encrypt notes and save them to this NoteStorage's file.
-  void save() {
+  /// Encrypt notes and save them to a file.
+  Future<void> saveNotes(NoteList notes) async {
     final obj = [for (final note in notes) note.toJson()];
     final data = encryptJson(obj, _password);
 
-    final file = File(_filePath);
-    file.writeAsBytesSync(data);
-  }
-
-  void addNote() {
-    notes.add(NoteData('', ''));
+    await File(_filePath).writeAsBytes(data);
   }
 }

@@ -1,87 +1,222 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
-import 'note_storage.dart';
+import 'note_storage.dart' show NoteList, Note;
+import 'note_manager.dart';
 
-class NoteStorageWidget extends StatefulWidget
+class NoteStorageWidget extends StatelessWidget
 {
-  const NoteStorageWidget({super.key, required this.storage});
+  const NoteStorageWidget({super.key, required this.noteManager});
 
-  final NoteStorage storage;
+  final NoteManager noteManager;
 
-  @override
-  State<NoteStorageWidget> createState() => _NoteStorageWidgetState();
-}
+  Widget buildNoteList(BuildContext context, NoteList notes) {
+    var noteButtons = <Widget>[
+      for (final note in notes)
+        NoteButton(note: note)
+    ];
 
-class _NoteStorageWidgetState extends State<NoteStorageWidget>
-{
-  void addNote() {
-    setState(() {
-      widget.storage.addNote();
-    });
+    // Wrap buttons in a Flexible widget
+    noteButtons = [for (final b in noteButtons) Flexible(child: b)];
+
+    // TODO: Calculate row size based on parent width
+    const int itemsPerRow = 4;
+    const double padding = 15.0;
+
+    /// Create a row of note buttons.
+    /// We insert SizedBoxes to create horizontal padding between items.
+    List<Widget> makeRowChildren(int i) {
+      var res = <Widget>[];
+      for (int j = i; j < i + itemsPerRow; j++) {
+        if (j < noteButtons.length) {
+          res.add(noteButtons[j]);
+        }
+        else {
+          // Make sure that notes don't take the full width in half-filled rows
+          res.add(const Flexible(child: SizedBox()));
+        }
+        res.add(const SizedBox(width: padding));
+      }
+      res.removeLast();
+      return res;
+    }
+
+    /// Create a column of rows of note buttons.
+    /// We insert SizedBoxes to create vertical padding between rows.
+    List<Widget> makeColumnChildren() {
+      var res = <Widget>[];
+      for (int i = 0; i < noteButtons.length; i += itemsPerRow) {
+        res.add(
+          IntrinsicHeight(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: makeRowChildren(i),
+            )
+          )
+        );
+        res.add(const SizedBox(height: padding));
+      }
+      res.removeLast();
+      return res;
+    }
+
+    return Column(children: makeColumnChildren());
+  }
+
+  Widget buildErrorMessage(BuildContext context) {
+    return Text(noteManager.errorMessage ?? 'An unexpected error occurred.');
   }
 
   @override
   Widget build(BuildContext context) {
-    var noteButtons = <Widget>[
-      for (final note in widget.storage.notes)
-        NoteButton(title: note.title, text: note.content)
-    ];
-    //var noteButtons = <Widget>[
-    //  NoteButton(title: 'My note', text: 'Hello, this is Carl. I\'m currently writing a lot of text because I need to test text clipping in this really cool widget that I\'m creating.'),
-    //  NoteButton(title: 'My note', text: 'Hello, this is Carl. I\'m currently writing a lot of text because I need to test text clipping in this really cool widget that I\'m creating.'),
-    //  NoteButton(title: 'My note', text: 'Hello, this is Carl. I\'m currently writing a lot of text because I need to test text clipping in this really cool widget that I\'m creating.'),
-    //  NoteButton(title: 'My note', text: 'Hello, this is Carl. I\'m currently writing a lot of text because I need to test text clipping in this really cool widget that I\'m creating.'),
-    //];
-
-    // Wrap buttons in an Expanded widget
-    //noteButtons = [for (final b in noteButtons) Expanded(child: b)];
-    noteButtons = [for (final b in noteButtons) FittedBox(child: b)];
-
-    return Row(
-      children: noteButtons,
+    return ListenableBuilder(
+      listenable: noteManager,
+      builder: (context, child) {
+        var notes = noteManager.noteList;
+        if (notes != null) {
+          return buildNoteList(context, notes);
+        }
+        return buildErrorMessage(context);
+      }
     );
   }
+}
+
+/// An action to be taken when a note has been edited.
+enum NoteEditResult {
+  commitChanges,
+  discardChanges
 }
 
 class NoteButton extends StatelessWidget
 {
   const NoteButton({
     super.key,
-    required this.title,
-    required this.text,
+    required this.note,
   });
 
-  final String title;
-  final String text;
+  final Note note;
+  final int maxLines = 4;
 
-  final int maxLines = 2;
-
-  Widget _buildButton(BuildContext context) {
-    return ElevatedButton(
-      onPressed: (){},
-      child: Container(
-        padding: const EdgeInsets.only(top: 5.0, bottom: 5.0,),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            Text(
-              text,
-              overflow: TextOverflow.ellipsis,
-              maxLines: maxLines,
-            ),
-          ],
-        ),
+  Widget buildButtonContent(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
+      alignment: Alignment.topLeft,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title text
+          Text(
+            note.title,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10.0),
+            child: null,
+          ),
+          // Body text
+          Text(
+            note.content,
+            overflow: TextOverflow.ellipsis,
+            maxLines: maxLines,
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget buildNoteEditorAlertDialog(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(40.0),
+      child: AlertDialog(
+        content: NoteEditorView(note: note),
+        actions: [
+          // "Save" button
+          TextButton(
+            onPressed: (){
+              Navigator.of(context).pop(NoteEditResult.commitChanges);
+            },
+            child: const Text('Save')
+          ),
+          // "Discard" button
+          TextButton(
+            onPressed: (){
+              Navigator.of(context).pop(NoteEditResult.discardChanges);
+            },
+            child: const Text('Discard')
+          ),
+        ],
+      )
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return _buildButton(context);
+    final initialTitle = note.title;
+    final initialContent = note.content;
+    return ElevatedButton(
+      onPressed: (){
+        showDialog(
+          context: context,
+          builder: buildNoteEditorAlertDialog,
+        ).then((value) {
+          // Value is `null` if the dialog is dismissed
+          if (value == null || value == NoteEditResult.commitChanges) {
+            note.updateInStorage();
+          }
+          else if (value == NoteEditResult.discardChanges) {
+            note.title = initialTitle;
+            note.content = initialContent;
+          }
+          else {
+            print('[Warning] Result of note editing dialog should be `null` or'
+                  ' an instance of `EditNoteResult`, but is: $value');
+          }
+        });
+      },
+      child: buildButtonContent(context),
+    );
+  }
+}
+
+class NoteEditorView extends StatelessWidget {
+  const NoteEditorView({ super.key, required this.note });
+
+  final Note note;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1.0 / 2.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Input field for the note's title
+          TextField(
+            controller: TextEditingController(text: note.title),
+            onChanged: (str) => note.title = str,
+            decoration: null,
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          // Space between title and content
+          const Padding(
+            padding: EdgeInsets.only(bottom: 20.0),
+            child: null,
+          ),
+          // Input field for the note's content
+          TextField(
+            controller: TextEditingController(text: note.content),
+            onChanged: (str) => note.content = str,
+            decoration: null,
+            maxLines: null,
+          ),
+        ],
+      ),
+    );
   }
 }

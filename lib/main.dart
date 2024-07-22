@@ -1,19 +1,24 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import 'note_storage.dart';
+import 'note_manager.dart';
 import 'note_storage_widget.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
 
   // Style constants
-  final double buttonCornerRadius = 5.0;
+  static const double buttonCornerRadius = 5.0;
+
+  final ButtonStyle defaultButtonStyle = ButtonStyle(
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonCornerRadius)),
+    ),
+  );
 
   // This widget is the root of your application.
   @override
@@ -44,33 +49,23 @@ class MyApp extends StatelessWidget {
 
         // Custom corner rounding for all buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ButtonStyle(
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonCornerRadius)),
-            ),
-          ),
-        ), //elevatedButtonTheme
+          style: defaultButtonStyle,
+        ),
       ),
       home: MyHomePage(
         title: 'Flutter Demo Home Page',
-        storageFile: 'foobar.txt',
-        password: 'foobar',
+        noteManager: NoteManager(NoteStorage('foobar.txt', 'foobar')),
       ),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({
     super.key,
     required this.title,
-    required this.storageFile,
-    required this.password,
-  }) : noteStorage = NoteStorage.load(storageFile, password);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+    required this.noteManager,
+  });
 
   // This class is the configuration for the state. It holds the values (in this
   // case the title) provided by the parent (in this case the App widget) and
@@ -78,28 +73,7 @@ class MyHomePage extends StatefulWidget {
   // always marked "final".
 
   final String title;
-  final String storageFile;
-  final String password;
-
-  final NoteStorage noteStorage;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  final NoteManager noteManager;
 
   @override
   Widget build(BuildContext context) {
@@ -117,55 +91,29 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text(title),
         actions: [
           IconButton(
-            onPressed: (){ widget.noteStorage.save(); },
+            onPressed: (){ noteManager.updateNotes(); },
             icon: const Icon(Icons.save),
           ),
         ],
       ),
-      body: Center(
+      body: Container(
+        padding: const EdgeInsets.all(30.0),
+
         // Center is a layout widget. It takes a single child and positions it
         // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            ElevatedButton(
-              onPressed: (){ print('Button pressed!'); },
-              child: const Text('Hello, World!', style: TextStyle(color: Colors.red)),
-            ),
-            Center(
-              child: NoteStorageWidget(storage: widget.noteStorage),
-            ),
-          ],
+        child: Container(
+          child: NoteStorageWidget(noteManager: noteManager),
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
+        // Floating 'add note' button.
+        onPressed: (){ noteManager.addNote(Note('<untitled>', '<empty>')); },
+        tooltip: 'Add note',
         child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ),
     );
   }
 }

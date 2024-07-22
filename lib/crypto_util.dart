@@ -4,11 +4,13 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart';
 
+/// Create a cryptographic key from a password string.
 Uint8List hashPassword(String password) {
   final digest = sha256.convert(utf8.encode(password));
   return Uint8List.fromList(digest.bytes);
 }
 
+/// Serialize and encrypt a JSON object.
 Uint8List encryptJson(dynamic jsonObj, String password) {
   final key = Key(hashPassword(password));
   final iv = IV.fromLength(16);
@@ -21,6 +23,7 @@ Uint8List encryptJson(dynamic jsonObj, String password) {
   return Uint8List.fromList(iv.bytes + encryptedJson);
 }
 
+/// Decrypt and parse data into a JSON object.
 dynamic decryptJson(Uint8List bytes, String password) {
   assert(bytes.length >= 16);
 
