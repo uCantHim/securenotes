@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'note_storage.dart';
+import 'crypto_util.dart';  // For DecryptionException
+import 'login_page.dart';
 import 'note_manager.dart';
+import 'note_storage.dart';
 import 'note_storage_widget.dart';
 
 void main() {
@@ -52,19 +54,17 @@ class MyApp extends StatelessWidget {
           style: defaultButtonStyle,
         ),
       ),
-      home: MyHomePage(
+      home: const MyHomePage(
         title: 'Flutter Demo Home Page',
-        noteManager: NoteManager(NoteStorage('foobar.txt', 'foobar')),
       ),
     );
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
   const MyHomePage({
     super.key,
     required this.title,
-    required this.noteManager,
   });
 
   // This class is the configuration for the state. It holds the values (in this
@@ -73,6 +73,42 @@ class MyHomePage extends StatelessWidget {
   // always marked "final".
 
   final String title;
+
+  @override
+  State<StatefulWidget> createState() => MyAppState();
+}
+
+class MyAppState extends State<MyHomePage> {
+  NoteManager? noteManager;
+
+  @override
+  Widget build(BuildContext context) {
+    if (noteManager != null) {
+      return NotePage(
+        noteManager: noteManager!,
+      );
+    }
+
+    return LoginPage(
+      onPasswordEntered: (password) async {
+        try {
+          final storage = NoteStorage('foobar.txt', password);
+          final notes = await NoteManager.fromStorage(storage);
+          setState((){
+            noteManager = notes;
+          });
+          return PasswordStatus.eCorrect;
+        } on DecryptionException {
+          return PasswordStatus.eIncorrect;
+        }
+      }
+    );
+  }
+}
+
+class NotePage extends StatelessWidget {
+  const NotePage({ super.key, required this.noteManager });
+
   final NoteManager noteManager;
 
   @override
@@ -91,12 +127,9 @@ class MyHomePage extends StatelessWidget {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text(title),
-        actions: [
-          IconButton(
-            onPressed: (){ noteManager.updateNotes(); },
-            icon: const Icon(Icons.save),
-          ),
+        title: const Text('A secure note app'),
+        actions: const [
+          // We could add some action buttons to the header bar here.
         ],
       ),
       body: Container(
@@ -104,9 +137,7 @@ class MyHomePage extends StatelessWidget {
 
         // Center is a layout widget. It takes a single child and positions it
         // in the middle of the parent.
-        child: Container(
-          child: NoteStorageWidget(noteManager: noteManager),
-        ),
+        child: NoteStorageWidget(noteManager: noteManager),
       ),
       floatingActionButton: FloatingActionButton(
         // Floating 'add note' button.

@@ -38,17 +38,14 @@ class NoteStorage
   final String _filePath;
   final String _password;
 
+  /// Throws [DecryptionException] if [this.password] is incorrect.
   Future<NoteList> loadNotes() async {
-    final notes = File(_filePath)
-        .create(exclusive: false)
-        .then((file) => file.readAsBytes())
-        .then((data) => decryptJson(data, _password))
-        .then((json) {
-          assert(json is List);
-          return [for (final note in json) Note.fromJson(note)];
-        });
+    final file = await File(_filePath).create(exclusive: false);
+    final data = await file.readAsBytes();
+    final json = await decryptJson(data, _password);
 
-    return notes;
+    assert(json is List);
+    return [for (final note in json) Note.fromJson(note)];
   }
 
   /// Encrypt notes and save them to a file.

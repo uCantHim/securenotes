@@ -8,38 +8,27 @@ import 'note_storage.dart';
 class NoteManager extends ChangeNotifier
 {
   final NoteStorage _storage;
+  NoteList noteList = [];
 
-  NoteList? noteList;
-  String? errorMessage;
-
-  NoteManager(this._storage) {
-    init();
-  }
-
-  Future<bool> init() async {
-    try {
-      noteList = await _storage.loadNotes();
-      for (final note in noteList!) {
-        note.addListener(updateNotes);
-      }
+  NoteManager(this._storage, this.noteList) {
+    for (final note in noteList) {
+      note.addListener(updateNotes);
     }
-    catch (err) {
-      errorMessage = 'Unable to load notes: $err';
-      return false;
-    }
-
     notifyListeners();
-    return true;
   }
 
-  NoteList? get notes => noteList;
+  /// Either returns a [NoteManager] object or fails with a
+  /// [DecryptionException].
+  static Future<NoteManager> fromStorage(NoteStorage storage) async {
+    final noteList = await storage.loadNotes();
+    return NoteManager(storage, noteList);
+  }
+
+  NoteList get notes => noteList;
 
   Future<void> addNote(Note newNote) async {
-    if (noteList == null && !await init()) {
-      return;
-    }
     newNote.addListener(updateNotes);
-    noteList!.add(newNote);
+    noteList.add(newNote);
 
     await _writeNotesToDisk();
     notifyListeners();
@@ -51,13 +40,11 @@ class NoteManager extends ChangeNotifier
   }
 
   Future<void> _writeNotesToDisk() async {
-    if (noteList != null) {
-      try {
-        await _storage.saveNotes(noteList!);
-      }
-      catch (err) {
-        print('Unable to save notes to disk: $err');
-      }
+    try {
+      await _storage.saveNotes(noteList);
+    }
+    catch (err) {
+      print('Unable to save notes to disk: $err');
     }
   }
 }

@@ -65,20 +65,13 @@ class NoteStorageWidget extends StatelessWidget
     return Column(children: makeColumnChildren());
   }
 
-  Widget buildErrorMessage(BuildContext context) {
-    return Text(noteManager.errorMessage ?? 'An unexpected error occurred.');
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: noteManager,
       builder: (context, child) {
         var notes = noteManager.noteList;
-        if (notes != null) {
-          return buildNoteList(context, notes);
-        }
-        return buildErrorMessage(context);
+        return buildNoteList(context, notes);
       }
     );
   }
