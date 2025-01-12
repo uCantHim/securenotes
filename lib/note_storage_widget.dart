@@ -14,7 +14,7 @@ class NoteStorageWidget extends StatelessWidget
   Widget buildNoteList(BuildContext context, NoteList notes) {
     var noteButtons = <Widget>[
       for (final note in notes)
-        NoteButton(note: note)
+        NoteButton(note: note, manager: noteManager)
     ];
 
     // Wrap buttons in a Flexible widget
@@ -77,10 +77,12 @@ class NoteStorageWidget extends StatelessWidget
   }
 }
 
-/// An action to be taken when a note has been edited.
-enum NoteEditResult {
+/// An action to be taken on an edited note
+enum NoteEditingOptions {
   commitChanges,
-  discardChanges
+  discardChanges,
+  deleteNote,
+  copyNote,
 }
 
 class NoteButton extends StatelessWidget
@@ -88,11 +90,15 @@ class NoteButton extends StatelessWidget
   const NoteButton({
     super.key,
     required this.note,
+    required this.manager,
   });
 
   final Note note;
+  final NoteManager manager;
   final int maxLines = 4;
 
+  /// Build content of the 'note button', i.e., a preview of the note's
+  /// content.
   Widget buildButtonContent(BuildContext context) {
     return Container(
       padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
@@ -123,52 +129,94 @@ class NoteButton extends StatelessWidget
     );
   }
 
+  /// Build the alert dialog that includes the text editor and an action bar
+  /// with options to manipulate the note.
   Widget buildNoteEditorAlertDialog(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(40.0),
       child: AlertDialog(
         content: NoteEditorView(note: note),
         actions: [
+          // Popup menu with detail options "delete", "rename", etc.
+          PopupMenuButton<NoteEditingOptions>(
+            initialValue: null,
+            onSelected: (NoteEditingOptions opt) {
+              Navigator.pop(context, opt);
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem(
+                value: NoteEditingOptions.deleteNote,
+                child: Text('Delete Note'),
+              ),
+              const PopupMenuItem(
+                value: NoteEditingOptions.copyNote,
+                child: Text('Copy Note'),
+              ),
+            ],
+          ),
           // "Save" button
           TextButton(
-            onPressed: (){
-              Navigator.of(context).pop(NoteEditResult.commitChanges);
-            },
+            onPressed: () => Navigator.pop(context, NoteEditingOptions.commitChanges),
             child: const Text('Save')
           ),
           // "Discard" button
           TextButton(
-            onPressed: (){
-              Navigator.of(context).pop(NoteEditResult.discardChanges);
-            },
-            child: const Text('Discard')
+            onPressed: () => Navigator.pop(context, NoteEditingOptions.discardChanges),
+            child: const Text('Cancel')
           ),
         ],
       )
     );
   }
 
+  /// Build the Note button with an on-click behaviour that opens it in an
+  /// editor dialog.
   @override
   Widget build(BuildContext context) {
     final initialTitle = note.title;
     final initialContent = note.content;
     return ElevatedButton(
       onPressed: (){
-        showDialog(
+        showDialog<NoteEditingOptions>(
           context: context,
           builder: buildNoteEditorAlertDialog,
         ).then((value) {
           // Value is `null` if the dialog is dismissed
-          if (value == null || value == NoteEditResult.commitChanges) {
-            note.updateInStorage();
-          }
-          else if (value == NoteEditResult.discardChanges) {
-            note.title = initialTitle;
-            note.content = initialContent;
-          }
-          else {
-            print('[Warning] Result of note editing dialog should be `null` or'
-                  ' an instance of `EditNoteResult`, but is: $value');
+          switch (value) {
+            case null:
+            case NoteEditingOptions.commitChanges:
+              note.updateInStorage();
+
+            case NoteEditingOptions.discardChanges:
+              note.title = initialTitle;
+              note.content = initialContent;
+
+            case NoteEditingOptions.deleteNote:
+              // Show a confirmation dialog before deleting
+              showDialog<bool>(
+                context: context,
+                builder: (BuildContext context) => AlertDialog(
+                  title: Text('Delete note "${note.title}"?'),
+                  content: const Text('This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel')
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Delete')
+                    ),
+                  ],
+                ),
+              ).then((bool? confirmed) {
+                if (confirmed == true) {
+                  manager.removeNote(note);
+                }
+              });
+
+            case NoteEditingOptions.copyNote:
+              manager.addNote(Note(note.title, note.content));
           }
         });
       },
@@ -177,6 +225,7 @@ class NoteButton extends StatelessWidget
   }
 }
 
+/// A text editor for a note.
 class NoteEditorView extends StatelessWidget {
   const NoteEditorView({ super.key, required this.note });
 

@@ -34,6 +34,11 @@ class NoteManager extends ChangeNotifier
     notifyListeners();
   }
 
+  Future<void> removeNote(Note removedNote) async {
+    noteList.removeWhere((note) => note == removedNote);
+    await updateNotes();
+  }
+
   Future<void> updateNotes() async {
     await _writeNotesToDisk();
     notifyListeners();
