@@ -33,6 +33,9 @@ class _LoginPageState extends State<LoginPage> {
         // The password input text field:
         TextField(
           obscureText: true,
+          onChanged: (_) {
+            setState(() { passwordEnteredButIncorrect = false; });
+          },
           onSubmitted: (text) {
             widget.onPasswordEntered(text)
                 .then((status) {
