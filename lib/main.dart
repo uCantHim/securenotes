@@ -79,24 +79,18 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyAppState extends State<MyHomePage> {
-  NoteManager? noteManager;
-
   @override
   Widget build(BuildContext context) {
-    if (noteManager != null) {
-      return NotePage(
-        noteManager: noteManager!,
-      );
-    }
-
     return LoginPage(
       onPasswordEntered: (password) async {
         try {
+          final navigator = Navigator.of(context);
+
           final storage = NoteStorage('foobar.txt', password);
           final notes = await NoteManager.fromStorage(storage);
-          setState((){
-            noteManager = notes;
-          });
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (context) => NotePage(noteManager: notes)),
+          );
           return PasswordStatus.eCorrect;
         } on DecryptionException {
           return PasswordStatus.eIncorrect;
