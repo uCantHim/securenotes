@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'crypto_util.dart';  // For DecryptionException
+import 'firsttime_login_page.dart';
 import 'login_page.dart';
 import 'note_manager.dart';
 import 'note_storage.dart';
@@ -78,25 +82,90 @@ class MyHomePage extends StatefulWidget {
   State<StatefulWidget> createState() => MyAppState();
 }
 
-class MyAppState extends State<MyHomePage> {
+class LoadingPage extends StatelessWidget {
+  const LoadingPage({ super.key, });
+
   @override
   Widget build(BuildContext context) {
-    return LoginPage(
-      onPasswordEntered: (password) async {
-        try {
-          final navigator = Navigator.of(context);
+    return const Scaffold(
+      body: Center(
+        child: Text(
+          'Loading...',
+          style: TextStyle(fontSize: 30),
+        ),
+      ),
+    );
+  }
+}
 
-          final storage = NoteStorage('foobar.txt', password);
-          final notes = await NoteManager.fromStorage(storage);
-          navigator.pushReplacement(
-            MaterialPageRoute(builder: (context) => NotePage(noteManager: notes)),
-          );
-          return PasswordStatus.eCorrect;
-        } on DecryptionException {
-          return PasswordStatus.eIncorrect;
+class MyAppState extends State<MyHomePage> {
+  String? _localStorageFilePath;
+  bool _initialized = false;
+
+  NoteManager? _noteManager;
+
+  MyAppState() {
+    _initialize()
+        .then((pair) {
+          setState(() {
+            _localStorageFilePath = pair.$1;
+            _initialized = pair.$2;
+          });
+        });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_localStorageFilePath == null) {
+      return const LoadingPage();
+    }
+
+    if (_noteManager != null) {
+      return NotePage(noteManager: _noteManager!);
+    }
+
+    if (_initialized) {
+      return LoginPage(
+        onPasswordEntered: (password) async {
+          try {
+            final storage = NoteStorage(_localStorageFilePath!, password);
+            final notes = await NoteManager.fromStorage(storage);
+            setState(() {
+              _noteManager = notes;
+            });
+            return PasswordStatus.eCorrect;
+          } on DecryptionException {
+            return PasswordStatus.eIncorrect;
+          }
         }
+      );
+    }
+
+    return CreatePasswordPage(
+      onPasswordSubmit: (password) {
+        final storage = NoteStorage(_localStorageFilePath!, password);
+        NoteManager.fromStorage(storage)
+            .then((noteManager) {
+              setState(() {
+                noteManager = noteManager;
+              });
+            });
       }
     );
+  }
+
+  static Future<String> _getNoteStorageFilePath() {
+    const fileName = 'foobar.txt';
+    return getApplicationDocumentsDirectory()
+        .then((dir) => dir.path)
+        .catchError((err) => '.')
+        .then((dirPath) => '$dirPath/$fileName');
+  }
+
+  /// Returns a pair [(localStorageFilePath, isInitialized)].
+  Future<(String, bool)> _initialize() {
+    return _getNoteStorageFilePath()
+        .then((path) async => (path, await File(path).exists()));
   }
 }
 

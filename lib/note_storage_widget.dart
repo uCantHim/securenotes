@@ -37,7 +37,9 @@ class NoteStorageWidget extends StatelessWidget
         }
         res.add(const SizedBox(width: padding));
       }
-      res.removeLast();
+      if (res.isNotEmpty) {
+        res.removeLast();
+      }
       return res;
     }
 
@@ -57,7 +59,9 @@ class NoteStorageWidget extends StatelessWidget
         );
         res.add(const SizedBox(height: padding));
       }
-      res.removeLast();
+      if (res.isNotEmpty) {
+        res.removeLast();
+      }
       return res;
     }
 
@@ -128,6 +132,8 @@ class NoteButton extends StatelessWidget
     final initialContent = note.content;
     return ElevatedButton(
       onPressed: (){
+        // TODO: How do I change behaviour based on screen size or mobile/desktop?
+        //NoteEditor.showAsAlertDialog(context, note).then((value) {
         NoteEditor.pushAsPage(context, note).then((value) {
           switch (value) {
             case NoteEditingOptions.discardChanges:

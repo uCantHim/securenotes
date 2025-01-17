@@ -38,17 +38,28 @@ class NoteStorage
   final String _filePath;
   final String _password;
 
+  /// Initializes a new note storage if the file does not exist or is
+  /// empty.
+  ///
   /// Throws [DecryptionException] if [this.password] is incorrect.
   Future<NoteList> loadNotes() async {
     final file = await File(_filePath).create(exclusive: false);
     final data = await file.readAsBytes();
-    final json = await decryptJson(data, _password);
 
+    // File is empty, i.e., a new storage has been created:
+    if (data.isEmpty) {
+      saveNotes([]);
+      return [];
+    }
+
+    final json = await decryptJson(data, _password);
     assert(json is List);
     return [for (final note in json) Note.fromJson(note)];
   }
 
   /// Encrypt notes and save them to a file.
+  ///
+  /// Note: The file [this._filePath] will be overwritten by this operation.
   Future<void> saveNotes(NoteList notes) async {
     final obj = [for (final note in notes) note.toJson()];
     final data = encryptJson(obj, _password);
