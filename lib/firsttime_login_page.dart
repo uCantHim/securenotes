@@ -1,9 +1,17 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'util_widgets.dart';
+
 class CreatePasswordPage extends StatefulWidget {
-  const CreatePasswordPage({ super.key, required this.onPasswordSubmit, });
+  const CreatePasswordPage({
+    super.key,
+    required this.onPasswordSubmit,
+    required this.onStorageFileSelect,
+  });
 
   final Function(String password) onPasswordSubmit;
+  final Function(String path) onStorageFileSelect;
 
   @override
   State<CreatePasswordPage> createState() => _CreatePasswordPageState();
@@ -19,7 +27,27 @@ class _CreatePasswordPageState extends State<CreatePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    var mainColumn = Column(
+    return Scaffold(
+      body: Container(
+        padding: const EdgeInsets.all(30.0),
+        child: IntrinsicWidth(
+          child: Column(
+            children: [
+              _buildPasswordCreateForm(context),
+              const Padding(
+                padding: EdgeInsets.only(top: 30.0, bottom: 30.0),
+                child: TextDivider(child: Text('or')),
+              ),
+              _buildFileSelectForm(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordCreateForm(BuildContext context) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Description:
@@ -57,31 +85,49 @@ class _CreatePasswordPageState extends State<CreatePasswordPage> {
           },
         ),
 
-        // Submit button
-        if (_canSubmit())
-          Padding(
-            padding: const EdgeInsets.only(top: 15),
-            child: Align(
-              alignment: Alignment.bottomRight,
-              child: TextButton(
-                onPressed: () {
-                  widget.onPasswordSubmit(password);
-                },
-                child: const Text('Create', style: TextStyle(fontSize: 20)),
-              )
-            ),
-          ),
+        // Error text and 'create' button are in the same row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Conditional error text if password is incorrect
+            Text(errorText ?? '', style: kErrorTextStyle),
 
-        // Conditional error text if password is incorrect
-        if (errorText != null)
-          Text(errorText!, style: kErrorTextStyle),
+            // Submit button
+            Padding(
+              padding: const EdgeInsets.only(top: 15),
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: TextButton(
+                  onPressed: !_canSubmit() ? null : () {
+                    widget.onPasswordSubmit(password);
+                  },
+                  child: const Text('Create', style: TextStyle(fontSize: 20)),
+                )
+              ),
+            ),
+          ]
+        ),
       ],
     );
+  }
 
-    return Scaffold(
-      body: Container(
-        padding: const EdgeInsets.all(30.0),
-        child: mainColumn,
+  Widget _buildFileSelectForm(BuildContext context) {
+    return TextButton(
+      onPressed: () {
+        FilePicker.platform.pickFiles(allowMultiple: false)
+            .then((FilePickerResult? res) {
+              if (res != null) {
+                widget.onStorageFileSelect(res.files.single.path!);
+              }
+            });
+      },
+      //style: TextButton.styleFrom(
+      //  foregroundColor: Colors.white,
+      //  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+      //),
+      child: const Text(
+        'Import backup file',
+        style: TextStyle(fontSize: 24),
       ),
     );
   }
@@ -97,7 +143,7 @@ class _CreatePasswordPageState extends State<CreatePasswordPage> {
   /// Returns an error message if the entered password is invalid, or
   /// [null] if it is valid.
   String? _checkPasswordIntegrity() {
-    if (password.length <= kMinPasswordLength) {
+    if (password.length < kMinPasswordLength) {
       return 'Password must be at least $kMinPasswordLength characters long.';
     }
     if (password != passwordRepeat) {

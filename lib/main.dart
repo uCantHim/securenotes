@@ -1,14 +1,19 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
-import 'crypto_util.dart';  // For DecryptionException
+import 'config.dart';
 import 'firsttime_login_page.dart';
+import 'loading_page.dart';
 import 'login_page.dart';
 import 'note_manager.dart';
 import 'note_storage.dart';
 import 'note_storage_widget.dart';
+import 'util_widgets.dart';
+
+/// Used to access the context in out-of-build alert dialogs.
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(MyApp());
@@ -32,6 +37,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
+        useMaterial3: true,
+
         // This is the theme of your application.
         //
         // TRY THIS: Try running your application with "flutter run". You'll see
@@ -51,7 +58,6 @@ class MyApp extends StatelessWidget {
             seedColor: Colors.indigo,
             brightness: Brightness.dark
         ),
-        useMaterial3: true,
 
         // Custom corner rounding for all buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -61,6 +67,8 @@ class MyApp extends StatelessWidget {
       home: const MyHomePage(
         title: 'Flutter Demo Home Page',
       ),
+
+      navigatorKey: navigatorKey,
     );
   }
 }
@@ -82,90 +90,57 @@ class MyHomePage extends StatefulWidget {
   State<StatefulWidget> createState() => MyAppState();
 }
 
-class LoadingPage extends StatelessWidget {
-  const LoadingPage({ super.key, });
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'Loading...',
-          style: TextStyle(fontSize: 30),
-        ),
-      ),
-    );
-  }
-}
-
 class MyAppState extends State<MyHomePage> {
-  String? _localStorageFilePath;
-  bool _initialized = false;
-
+  AppConfig? _config;
   NoteManager? _noteManager;
 
   MyAppState() {
-    _initialize()
-        .then((pair) {
-          setState(() {
-            _localStorageFilePath = pair.$1;
-            _initialized = pair.$2;
-          });
-        });
+    AppConfig.loadSystemConfig()
+        // Initialize app configuration
+        .then((conf) { setState((){ _config = conf; }); });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_localStorageFilePath == null) {
-      return const LoadingPage();
+    initNoteManager(String storagePath, String password) {
+      final storage = NoteStorage(storagePath, password);
+      return NoteManager.fromStorage(storage)
+          .then((notes) {
+            setState((){ _noteManager = notes; });
+          });
     }
 
     if (_noteManager != null) {
       return NotePage(noteManager: _noteManager!);
     }
 
-    if (_initialized) {
+    if (_config == null) {
+      return const LoadingPage();
+    }
+
+    if (File(_config!.noteStorageFilePath).existsSync()) {
       return LoginPage(
-        onPasswordEntered: (password) async {
-          try {
-            final storage = NoteStorage(_localStorageFilePath!, password);
-            final notes = await NoteManager.fromStorage(storage);
-            setState(() {
-              _noteManager = notes;
-            });
-            return PasswordStatus.eCorrect;
-          } on DecryptionException {
-            return PasswordStatus.eIncorrect;
-          }
+        onPasswordEntered: (password) {
+          return initNoteManager(_config!.noteStorageFilePath, password)
+              .then((_) => PasswordStatus.eCorrect)
+              .catchError((_) => PasswordStatus.eIncorrect);
         }
       );
     }
 
     return CreatePasswordPage(
       onPasswordSubmit: (password) {
-        final storage = NoteStorage(_localStorageFilePath!, password);
-        NoteManager.fromStorage(storage)
-            .then((noteManager) {
-              setState(() {
-                noteManager = noteManager;
-              });
-            });
-      }
+        initNoteManager(_config!.noteStorageFilePath, password);
+      },
+      onStorageFileSelect: (file) async {
+        assert(File(file).existsSync());
+        assert(_config != null);
+        assert(!File(_config!.noteStorageFilePath).existsSync());
+
+        await File(file).copy(_config!.noteStorageFilePath);
+        setState(() { /* A new storage object was loaded. */ });
+      },
     );
-  }
-
-  static Future<String> _getNoteStorageFilePath() {
-    const fileName = 'foobar.txt';
-    return getApplicationDocumentsDirectory()
-        .then((dir) => dir.path)
-        .catchError((err) => '.')
-        .then((dirPath) => '$dirPath/$fileName');
-  }
-
-  /// Returns a pair [(localStorageFilePath, isInitialized)].
-  Future<(String, bool)> _initialize() {
-    return _getNoteStorageFilePath()
-        .then((path) async => (path, await File(path).exists()));
   }
 }
 
