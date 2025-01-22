@@ -12,13 +12,28 @@ class AppConfig {
 
   late final String noteStorageFilePath;
 
+  /// Find the file path of the local note storage.
   static Future<String> getNoteStorageFilePath() async {
     const fileName = 'securenotes_storage.txt';
+    final dirs = <Future<String> Function()>[
+      () async => getApplicationDocumentsDirectory()
+          .then((d) => p.join(d.path, '.config/securenotes')),
+      () async => getApplicationDocumentsDirectory().then((d) => d.path),
+      () async => '.',
+   ];
 
-    return getApplicationDocumentsDirectory()
-        .then((dir) => dir.path)
-        .catchError((err) => '.')
-        .then((dirPath) => p.join(dirPath, fileName));
+    for (final func in dirs) {
+      try {
+        final path = p.canonicalize(await func());
+        final dir = await Directory(path).create();
+        return p.join(dir.path, fileName);
+      }
+      catch (err) {
+        // Continue
+      }
+    }
+
+    return '${p.canonicalize('.')}/$fileName';
   }
 
   /// Load an [AppConfig] from the default location on the current system.
