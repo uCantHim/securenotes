@@ -6,11 +6,9 @@ import 'package:path_provider/path_provider.dart';
 
 /// Global configuration settings for the secure notes app.
 class AppConfig {
-  AppConfig() {
-    getNoteStorageFilePath().then((path) => noteStorageFilePath = path);
-  }
+  AppConfig(this.noteStorageFilePath);
 
-  late final String noteStorageFilePath;
+  final String noteStorageFilePath;
 
   /// Find the file path of the local note storage.
   static Future<String> getNoteStorageFilePath() async {
@@ -42,9 +40,12 @@ class AppConfig {
     return _openConfigFile()
         .then((file) => file.readAsString())
         .then((str)  => jsonDecode(str))
-        .then((json) => AppConfig.fromJson(json))
+        .then((json) => AppConfig.fromJson(json)!)
         // Default to an empty config.
-        .catchError((_) => AppConfig());
+        .catchError((_) async {
+          final path = await AppConfig.getNoteStorageFilePath();
+          return AppConfig(path);
+        });
   }
 
   /// Returns an exception if an underlying system error occurs.
@@ -56,8 +57,11 @@ class AppConfig {
   }
 
   /// Construct a configuration object from a JSON object.
-  factory AppConfig.fromJson(Map<String, dynamic> json) {
-    return AppConfig();
+  static AppConfig? fromJson(Map<String, dynamic> json) {
+    if (!json.containsKey('noteStorageFilePath')) {
+      return null;
+    }
+    return AppConfig(json['noteStorageFilePath']);
   }
 
   /// Turn the configuration into a JSON object.
